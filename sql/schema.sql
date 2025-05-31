@@ -1,0 +1,1 @@
+-- PostgreSQL Schema File (initial draft)
