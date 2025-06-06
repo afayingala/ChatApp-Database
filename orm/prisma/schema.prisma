@@ -1,1 +1,169 @@
-// Prisma schema for database (to be completed)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id                                     String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username                                    String                      @unique @db.VarChar(50)
+  email                                       String                      @unique @db.VarChar(100)
+  full_name                                   String?                     @db.VarChar(100)
+  date_of_birth                               DateTime?                   @db.Date
+  profile_picture_url                         String?
+  bio                                         String?
+  status                                      user_status_enum            @default(active)
+  created_at                                  DateTime?                   @default(now()) @db.Timestamptz(6)
+  updated_at                                  DateTime?                   @default(now()) @db.Timestamptz(6)
+  last_seen                                   DateTime?                   @default(now()) @db.Timestamptz(6)
+  conversation_participants                   conversation_participants[]
+  conversations                               conversations[]
+  friendships_friendships_addressee_idTousers friendships[]               @relation("friendships_addressee_idTousers")
+  friendships_friendships_requester_idTousers friendships[]               @relation("friendships_requester_idTousers")
+  message_read_receipts                       message_read_receipts[]
+  messages                                    messages[]
+  user_sessions                               user_sessions[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([last_seen], map: "idx_users_last_seen")
+  @@index([status], map: "idx_users_status")
+  @@index([username], map: "idx_users_username")
+  @@map("users")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model admins {
+  admin_id       String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  full_name      String    @db.VarChar(100)
+  username       String    @unique @db.VarChar(50)
+  email          String    @unique @db.VarChar(100)
+  password_hash  String    @db.VarChar(255)
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime? @default(now()) @db.Timestamptz(6)
+  last_login     DateTime? @db.Timestamptz(6)
+  is_super_admin Boolean?  @default(false)
+}
+
+model conversation_participants {
+  participant_id  String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversation_id String        @db.Uuid
+  user_id         String        @db.Uuid
+  joined_at       DateTime?     @default(now()) @db.Timestamptz(6)
+  left_at         DateTime?     @db.Timestamptz(6)
+  is_admin        Boolean?      @default(false)
+  conversations   conversations @relation(fields: [conversation_id], references: [conversation_id], onDelete: Cascade, onUpdate: NoAction)
+  users           User          @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([conversation_id, user_id], map: "unique_participant")
+  @@index([conversation_id], map: "idx_participants_conversation")
+  @@index([user_id], map: "idx_participants_user")
+}
+
+model conversations {
+  conversation_id           String                      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversation_name         String?                     @db.VarChar(100)
+  is_group_chat             Boolean?                    @default(false)
+  created_by                String?                     @db.Uuid
+  created_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime?                   @default(now()) @db.Timestamptz(6)
+  conversation_participants conversation_participants[]
+  users                     User?                       @relation(fields: [created_by], references: [user_id], onUpdate: NoAction)
+  messages                  messages[]
+
+  @@index([created_by], map: "idx_conversations_created_by")
+  @@index([updated_at], map: "idx_conversations_updated_at")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model friendships {
+  friendship_id                         String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  requester_id                          String                 @db.Uuid
+  addressee_id                          String                 @db.Uuid
+  status                                friendship_status_enum @default(pending)
+  created_at                            DateTime?              @default(now()) @db.Timestamptz(6)
+  updated_at                            DateTime?              @default(now()) @db.Timestamptz(6)
+  users_friendships_addressee_idTousers User                   @relation("friendships_addressee_idTousers", fields: [addressee_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  users_friendships_requester_idTousers User                   @relation("friendships_requester_idTousers", fields: [requester_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([requester_id, addressee_id], map: "unique_friendship")
+  @@index([addressee_id], map: "idx_friendships_addressee")
+  @@index([requester_id], map: "idx_friendships_requester")
+  @@index([status], map: "idx_friendships_status")
+}
+
+model message_read_receipts {
+  receipt_id String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  message_id String    @db.Uuid
+  user_id    String    @db.Uuid
+  read_at    DateTime? @default(now()) @db.Timestamptz(6)
+  messages   messages  @relation(fields: [message_id], references: [message_id], onDelete: Cascade, onUpdate: NoAction)
+  users      User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([message_id, user_id], map: "unique_read_receipt")
+  @@index([message_id], map: "idx_receipts_message")
+  @@index([user_id], map: "idx_receipts_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model messages {
+  message_id            String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversation_id       String                  @db.Uuid
+  sender_id             String                  @db.Uuid
+  message_type          message_type_enum       @default(text)
+  content               String?
+  file_url              String?
+  reply_to_message_id   String?                 @db.Uuid
+  sent_at               DateTime?               @default(now()) @db.Timestamptz(6)
+  edited_at             DateTime?               @db.Timestamptz(6)
+  is_deleted            Boolean?                @default(false)
+  message_read_receipts message_read_receipts[]
+  conversations         conversations           @relation(fields: [conversation_id], references: [conversation_id], onDelete: Cascade, onUpdate: NoAction)
+  messages              messages?               @relation("messagesTomessages", fields: [reply_to_message_id], references: [message_id], onUpdate: NoAction)
+  other_messages        messages[]              @relation("messagesTomessages")
+  users                 User                    @relation(fields: [sender_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([conversation_id], map: "idx_messages_conversation")
+  @@index([reply_to_message_id], map: "idx_messages_reply_to")
+  @@index([sender_id], map: "idx_messages_sender")
+  @@index([sent_at], map: "idx_messages_sent_at")
+}
+
+model user_sessions {
+  session_id    String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id       String    @db.Uuid
+  session_token String    @unique @db.VarChar(255)
+  ip_address    String?   @db.Inet
+  user_agent    String?
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at    DateTime  @db.Timestamptz(6)
+  is_active     Boolean?  @default(true)
+  users         User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "idx_user_sessions_expires")
+  @@index([session_token], map: "idx_user_sessions_token")
+  @@index([user_id], map: "idx_user_sessions_user_id")
+}
+
+enum friendship_status_enum {
+  pending
+  accepted
+  blocked
+  declined
+}
+
+enum message_type_enum {
+  text
+  image
+  file
+  system
+}
+
+enum user_status_enum {
+  active
+  inactive
+  suspended
+  deleted
+}
