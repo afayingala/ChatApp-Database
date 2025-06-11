@@ -181,16 +181,6 @@ CREATE TRIGGER user_audit_trigger
 AFTER INSERT OR UPDATE OR DELETE ON "User"
 FOR EACH ROW EXECUTE FUNCTION audit_trigger_fn();
 
--- 16. REPORT QUERY EXAMPLE
--- SELECT FROM audit_log WHERE messages changed in past 7 days
--- SELECT AuditID, TableName, Operation, ChangedBy, ChangedAt,
---        OldData->>'Content' AS OldMessage,
---        NewData->>'Content' AS NewMessage
--- FROM audit_log
--- WHERE TableName = 'Message' AND Operation = 'UPDATE'
---   AND ChangedAt >= NOW() - INTERVAL '7 days';
-
-******************************************************
 
 -- 16. Function to generate daily audit report for ALL table changes
 CREATE OR REPLACE FUNCTION generate_full_daily_audit_report()
